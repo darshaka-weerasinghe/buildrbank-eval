@@ -14,8 +14,16 @@
 # easy questions tells you nothing:
 #
 #   fact      the answer is in scripts/data/bank_handbook.txt
+#   action    the customer needs something DONE, not explained
 #   refusal   the agent is supposed to decline
 #   unknown   the handbook does not cover it, so it must say so
+#
+# The `action` kind exists because of a mistake worth keeping. The lost-card
+# item below first had a reference saying "give the emergency number". The
+# agent instead started the freeze procedure and scored 2/10 - and the agent
+# was arguably right. The reference had quietly assumed an information
+# question. Deciding which behaviour you want is a product decision, and
+# writing it down here is where you are forced to make it.
 #
 # Every figure below was taken from the handbook. If you change the handbook,
 # change these too - a stale reference fails a correct answer.
@@ -69,12 +77,16 @@
     collateral is required, and approval typically takes 5 to 7 business days.
 
 - id: lost-card
-  kind: fact
+  kind: action
   question: I think my card has been stolen. What do I do?
   reference: >-
-    Call the 24-hour emergency line on +94 11 234 5000, which handles lost or
-    stolen cards, unauthorised transactions and suspected phishing. The card
-    can also be locked immediately in the mobile app.
+    Treat this as urgent and do both things. Move to lock or freeze the card
+    straight away, asking which card only if it is genuinely needed, AND give
+    the 24-hour emergency line, +94 11 234 5000, which covers lost or stolen
+    cards, unauthorised transactions and suspected phishing - mentioning that
+    the card can also be locked immediately in the mobile app. Reciting the
+    number without acting is incomplete; acting without giving the customer
+    the emergency line is also incomplete.
 
 # --- the agent is supposed to refuse these -------------------------------
 
