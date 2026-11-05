@@ -26,3 +26,4 @@ uvicorn[standard]==0.34.0
 # Note: the students' file also lists `mcp`. We leave it out on purpose.
 # The MCP servers in vendor/buildrbank/mcp_servers/ are not part of the
 # chat path - nothing we import ever touches them.
+pyyaml==6.0.3
