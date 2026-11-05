@@ -68,8 +68,9 @@ tells you whether a change made things better or only different.
 
 ## Start here
 
-The step-by-step sheet is being written. Until then, `python scripts/check.py`
-verifies your environment and `.env.example` lists what it needs.
+**[STEPS.md](STEPS.md)** — eighteen steps, from forking this repo to proving a
+prompt change helped. `python scripts/check.py` verifies your environment
+first.
 
 > **One thing that will bite you.** OpenRouter bills from an account balance,
 > not from the per-key limit shown on the keys page. A new account's signup
