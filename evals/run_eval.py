@@ -54,6 +54,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", default="baseline",
                     help="label for this run, so you can tell runs apart")
+    ap.add_argument("--no-evidence", action="store_true",
+                    help="withhold the retrieved evidence from the judge. Note "
+                         "what this does NOT do: scores stay high, because the "
+                         "reference already says what correct looks like. That "
+                         "is the point of a test set - production never has one.")
     args = ap.parse_args()
 
     _intercept_live_judge()
@@ -82,7 +87,8 @@ def main() -> int:
                           answer=output or "",
                           reference=expected_output,
                           behavior=meta.get("behavior"),
-                          evidence=_evidence.get(item_id, ""))
+                          evidence="" if args.no_evidence
+                                   else _evidence.get(item_id, ""))
         return [
             Evaluation(name="judge_score", value=float(v.get("score", 0)),
                        comment=str(v.get("reason", "")), data_type="NUMERIC"),
@@ -103,6 +109,9 @@ def main() -> int:
         max_concurrency=1,
     )
 
+    if args.no_evidence:
+        print("\n  (graded without the retrieved evidence - the reference is "
+              "carrying it)")
     print(f"\n  {'item':<26}{'score':>6}  {'pass':<6}")
     print("  " + "-" * 44)
     scores, passes = [], []
