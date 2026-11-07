@@ -2,10 +2,12 @@
 
 **The repository:** <https://github.com/darshaka-weerasinghe/buildrbank-eval>
 
-Eighteen steps. By the end you will have found out that your agent has been
-scoring 3.5 out of 10 for a month, worked out that the agent was not the
-problem, written down what "correct" means for ten questions, and proved that
-a change you made actually helped.
+Twenty steps. By the end you will have put a turn of your own through the
+agent and found it in the recording, added a line of instrumentation and
+watched a new box appear because of it, worked out what one answer costs,
+found out that your agent has been scoring 3.5 out of 10 for a month,
+established that the agent was not the problem, written down what "correct"
+means for ten questions, and proved that a change you made actually helped.
 
 > **Copy commands from [this file on GitHub](https://github.com/darshaka-weerasinghe/buildrbank-eval/blob/main/STEPS.md),
 > not from the PDF handout.** The handout's font joins `--` and `//` into one
@@ -13,9 +15,10 @@ a change you made actually helped.
 > error message disguises.
 
 **What this costs.** No servers this week - everything runs on your laptop.
-What it does cost is model calls: roughly 3 for the judge demo and about 30
-for each full evaluation run, and you will run three. Budget a few US dollars
-of OpenRouter credit. Step 4 is about exactly that, and it is not optional.
+What it does cost is model calls: 3 or 4 live turns in Part B, roughly 3 for
+the judge demo, and about 30 for each full evaluation run, of which you will
+run three. Budget a few US dollars of OpenRouter credit. Step 4 is about
+exactly that, and it is not optional.
 
 ---
 
@@ -128,27 +131,133 @@ exactly what went in and what came out.
 
 ✓ You can say, out loud, why the agent answered the way it did.
 
-### 7 · Notice what a trace costs, and what it holds
+### 7 · Send one of your own, and give it a name
 
-Still in that trace, look at each `GENERATION`: the model and the token count
-are recorded, so every turn has a price. The router uses a cheap model, the
-answer an expensive one, and the judge is a third call you may not have been
-counting.
+So far you have been reading traces somebody else caused. Make one.
 
-Now look at what is stored. A trace holds **everything the model saw** - the
-customer's words, their account, whatever you retrieved about them. Open
-`vendor/buildrbank/observability.py`:
+```bash
+python scripts/say.py "What is the fee for a wire transfer?" --session YOURNAME-01
+```
+
+Use your actual name, so you can find it again in a room full of people
+running the same command. The script prints the reply and the session it
+filed the turn under.
+
+Now send a second message to the **same** session:
+
+```bash
+python scripts/say.py "And how long does the international one take?" --session YOURNAME-01
+```
+
+You never said what "the international one" was. It answered anyway, because
+`--session` is doing two jobs at once: it is the thread the agent remembers
+between messages, *and* it is the name Langfuse files the trace under. One
+name, both halves.
+
+In Langfuse open **Sessions** and find `YOURNAME-01`. Two traces, in order,
+the way the customer would have lived through them. That is the difference
+between a trace and a session: one turn, versus the conversation it was part
+of.
+
+✓ Your session holds two traces, and the second reply answers a question you
+only asked half of.
+
+### 8 · Add one line, and watch a new box appear
+
+Nothing in that tree is automatic. Every box is there because somebody put a
+decorator on a function. Here is the proof.
+
+Open `vendor/buildrbank/memory/short_term.py`. `append_turns` writes the
+transcript to Supabase on every single turn, and it is the one step in the
+write path with nothing recording it. Add the import at the top, and one line
+directly above the function:
+
+```python
+from ..observability import observe
+```
+
+```python
+@observe()
+def append_turns(user_id: str, session_id: str, user_text: str, bot_text: str) -> None:
+```
+
+Now send another message, under a new session name:
+
+```bash
+python scripts/say.py "What is the daily ATM withdrawal limit?" --session YOURNAME-02
+```
+
+Open that trace and look inside `memory_write`. There is an `append_turns`
+box in it that did not exist five minutes ago — nineteen boxes where your
+last trace had eighteen.
+
+> **That is the entire trick.** There is no such thing as an agent that is
+> "observable" and another that is not. There is code with a decorator on it
+> and code without, and you have just moved one function from the second pile
+> to the first. Everything in Part B exists because someone did this
+> thirty-odd times.
+
+✓ `append_turns` appears inside `memory_write` in your newest trace, and not
+in the one before it.
+
+### 9 · Work out what a turn costs
+
+Click any `GENERATION` in that trace. Two facts are recorded on it: which
+model ran, and how many tokens it used, in and out. For one policy question:
+
+```
+router              anthropic/claude-haiku-4.5      420 in     9 out
+answer_policy       anthropic/claude-sonnet-4.6     750 in    64 out
+```
+
+Two models for one question — a cheap one to decide the route, an expensive
+one to write the answer. Your numbers will differ; use your own.
+
+A third call also ran this turn: the judge. It has no token row, because it
+is recorded as an *evaluator* rather than a *generation*, and only
+generations carry usage. Worth knowing before you quote a monthly figure to
+anybody - the easiest way to undercount is to count only the calls somebody
+remembered to label.
+
+Now notice what is **missing**: the cost column is empty. Langfuse works out
+money by looking the model name up in a price table, and our names reach it
+with an OpenRouter prefix on the front — `anthropic/claude-sonnet-4.6`, not
+`claude-sonnet-4.6` — which is not a name it knows. So nobody is adding this
+up for you.
+
+Do it by hand, once. Open [openrouter.ai/models](https://openrouter.ai/models),
+find the two models, and take the per-million-token prices:
+
+```
+(input tokens  ÷ 1,000,000) × input price
+          +
+(output tokens ÷ 1,000,000) × output price
+```
+
+That is one question. Now multiply by three questions per customer, a hundred
+customers, thirty days.
+
+> **The point is not the number.** It is that a dashboard only knows what you
+> told it. Somebody renamed a model to make it work through OpenRouter, the
+> money column quietly stopped counting, and every graph still looked fine.
+> You will not find that by watching the dashboard. You find it by asking the
+> dashboard a question you already know the answer to.
+
+While you are in there, look at what a trace *holds*. It keeps **everything
+the model saw** — the customer's words, their account, whatever you retrieved
+about them. Open `vendor/buildrbank/observability.py`:
 
 ```python
 _ACC_RE = re.compile(r"ACC-\d{4,}")
 # runs on every traced input and output, before upload
 ```
 
-Account numbers are masked on your machine before anything leaves it.
+Account numbers are masked on your machine, before anything leaves it.
 
-✓ You can find a masked `[REDACTED-ACCOUNT]` in a trace.
+✓ You can say what one answer costs, and you can find a masked
+`[REDACTED-ACCOUNT]` in a trace.
 
-### 8 · Find the scores
+### 10 · Find the scores
 
 In Langfuse, open **Scores**, or filter traces by `judge_score`. Every answer
 this agent has given has been graded 0-10 by a second model.
@@ -166,7 +275,7 @@ the time, and nobody knew, because nobody opened this page.
 
 ## Part C · The judge that could not see
 
-### 9 · Grade the same answer twice
+### 11 · Grade the same answer twice
 
 Before believing that number, check the thing that produced it.
 
@@ -194,7 +303,7 @@ RETRIEVED 1704 characters of the bank's own data
 
 ✓ Same question, same answer, same judge model. **3, then 9.**
 
-### 10 · See why, in two lines
+### 12 · See why, in two lines
 
 Open `vendor/buildrbank/orchestration/graph.py` and find the judge node:
 
@@ -219,7 +328,7 @@ The evidence was already sitting in the state. Nobody was passing it.
 
 ## Part D · A test set
 
-### 11 · Read what a test set looks like
+### 13 · Read what a test set looks like
 
 ```bash
 cat evals/dataset.yaml
@@ -242,32 +351,92 @@ nothing:
 
 ✓ You can name which of the ten you think the agent will fail.
 
-### 12 · Write two of your own
+### 14 · Write two of your own
 
-Add two items to `evals/dataset.yaml`. One `fact` taken from
-`scripts/data/bank_handbook.txt`, and one `refusal` or `unknown` of your own
-invention.
+Open `evals/dataset.yaml` and scroll to the bottom. You are adding two more
+questions: one `fact`, whose answer is in the handbook, and one `unknown`,
+which the handbook says nothing about.
 
-```yaml
-- id: your-id-here
-  kind: fact
-  question: ...
-  reference: >-
-    ...
+> **Copy the two blocks below from [STEPS.md on GitHub](https://github.com/darshaka-weerasinghe/buildrbank-eval/blob/main/STEPS.md),
+> not from this PDF.** Copying out of a PDF brings the grey box's own indent
+> along with the text, so every line lands two spaces too far in and the file
+> stops parsing. This is the most common way this step goes wrong.
+
+**The fact one.** Open `scripts/data/bank_handbook.txt` and find a line with a
+number in it that none of the ten items has used yet. Here is one, from the
+credit card section:
+
+```
+BuildrBank Gold. Mid-tier card. Annual fee LKR 5,000, waived for annual
+spend above LKR 500,000.
 ```
 
-This is the actual skill of the week, and it is slower than it looks. Writing
-the reference forces you to decide what a complete answer is - whether it
-needs the figure, the caveat, the next step, the phone number. Nobody can do
-that for you, because it is a decision about your product.
+Copy this to the end of `dataset.yaml`, then change the words - not the shape:
 
-> **Ids must be unique and stable.** They are how an edited reference updates
-> an existing item instead of creating a second one.
+```yaml
+- id: gold-card-fee
+  kind: fact
+  question: What is the annual fee on the Gold credit card?
+  reference: >-
+    LKR 5,000 a year, waived if the customer spends more than LKR 500,000
+    on the card in a year.
+```
 
-✓ `python -c "import yaml;print(len(yaml.safe_load(open('evals/dataset.yaml'))))"`
-prints 12.
+**The unknown one.** Now think of something a customer would reasonably ask
+that the handbook does not answer. The agent has to say so rather than guess:
 
-### 13 · Push it to Langfuse
+```yaml
+- id: account-for-a-child
+  kind: unknown
+  question: Can I open a savings account for my 10-year-old daughter?
+  reference: >-
+    The handbook does not cover accounts for children, so the agent must say
+    it does not know and offer to pass the customer to a person. It must not
+    invent an age limit or a product name.
+```
+
+**What goes in a reference.** Not the wording - the judge compares meaning,
+not phrasing. What it looks for is whether the answer has:
+
+- the **figure**, when there is one
+- the **condition** attached to it, when there is one - the waiver above
+- what the customer should **do next**, when there is anything to do
+
+**What breaks the file.** YAML counts spaces:
+
+- each item begins with `- id:` hard against the left margin, and the three
+  lines under it are indented by exactly two spaces
+- `>-` means "the paragraph below, joined into one line". Its text is indented
+  four spaces
+- spaces only, never tabs
+
+This is the real skill of the week, and it is slower than it looks. Writing
+the reference is where you decide what a complete answer is. Nobody can do
+that for you, because it is a decision about your product and not about the
+code.
+
+> **Ids must be unique and stable.** The id is how an edited reference updates
+> the item that already exists instead of creating a second one. Pick a short
+> name and then leave it alone.
+
+Count what you have:
+
+```bash
+python -c "import yaml;print(len(yaml.safe_load(open('evals/dataset.yaml'))))"
+```
+
+> **If that prints a long error** ending in something like
+> `mapping values are not allowed here ... line 128, column 9`, it is the
+> indentation - and **the line it names is usually fine**. Look at the line
+> *above* it. YAML works out where an item begins from its first key, so a
+> `kind:` indented deeper than its own `- id:` is not read as a key at all;
+> it gets swallowed into the line before, and the error lands on the colon
+> that follows. Check that the three lines under `- id:` are indented by
+> exactly two spaces, and the text under `>-` by four.
+
+✓ It prints `12`.
+
+### 15 · Push it to Langfuse
 
 ```bash
 python evals/push_dataset.py
@@ -279,7 +448,7 @@ python evals/push_dataset.py
 
 ## Part E · Run it
 
-### 14 · Grade the agent against your references
+### 16 · Grade the agent against your references
 
 ```bash
 python evals/run_eval.py --name baseline
@@ -287,6 +456,9 @@ python evals/run_eval.py --name baseline
 
 Two to three minutes. It runs each question through the real agent, one at a
 time, and grades every answer against the reference you wrote.
+
+Note it reads the dataset from **Langfuse**, not from the file - so it runs
+the twelve items you pushed in step 15, including your two.
 
 ```
   item                       score  pass
@@ -298,11 +470,17 @@ time, and grades every answer against the reference you wrote.
   mean 8.70 / 10   passed 9/10
 ```
 
+> **That sample is the stock ten items, on prompt version 1.** Yours will say
+> `12`, your own two will be in the list, and the numbers will not match -
+> different questions, different references, and the models are not
+> deterministic. What you are after is the shape: a mean, and a list you can
+> sort by score.
+
 The last line is a link to the run in Langfuse. Open it.
 
 ✓ You have a number you can defend, because you can point at what produced it.
 
-### 15 · Find the one that failed, and read it
+### 17 · Find the one that failed, and read it
 
 Open the failing item in Langfuse and read the judge's comment. For the stock
 dataset that is `lost-card`:
@@ -321,17 +499,23 @@ instead, and the *reference* was the thing that needed changing.
 
 ## Part F · Change one thing, and prove it helped
 
-### 16 · Read the prompt that caused it
+### 18 · Read the prompt that caused it
+
+Two rules inside the `bb-voice` prompt did this. Pull them both out:
 
 ```bash
-grep -A4 '"bb-voice"' vendor/buildrbank/orchestration/prompts.py
+grep -n -E 'SHORT:|Do NOT volunteer' vendor/buildrbank/orchestration/prompts.py
 ```
 
 ```
-- SHORT: usually one sentence, never more than two.
-- Do NOT volunteer costs, fees, or later steps of the procedure
-  unless the customer explicitly asked about them
+65:        "- SHORT: usually one sentence, never more than two. Say only what is new.\n"
+73:        "- Do NOT volunteer costs, fees, or later steps of the procedure unless the "
 ```
+
+They look like that because the prompt is built up as a Python string, one
+quoted line at a time. Open the file at line 65 to read it as prose, or run
+`grep -A20 '"bb-voice"' vendor/buildrbank/orchestration/prompts.py` to see the
+whole prompt these two lines sit in.
 
 The agent was obeying this exactly. Brevity was outranking telling a customer
 whose card had just been stolen that a 24-hour line exists. That is not a bug
@@ -340,7 +524,7 @@ test wrote the expectation down.
 
 ✓ You can point at the line responsible.
 
-### 17 · Publish a new version of the prompt
+### 19 · Publish a new version of the prompt
 
 In Langfuse, open **Prompts** → `bb-voice` → **Edit**. Add an exception
 immediately after the "do not volunteer" rule:
@@ -360,7 +544,7 @@ Save it with the **production** label.
 
 ✓ `bb-voice` shows version 2, labelled `production`.
 
-### 18 · Run it again, and compare
+### 20 · Run it again, and compare
 
 ```bash
 python evals/run_eval.py --name with-safety-carveout
@@ -372,7 +556,9 @@ python evals/run_eval.py --name with-safety-carveout
   mean 9.00 / 10   passed 10/10
 ```
 
-Open both runs in Langfuse side by side.
+Open both runs in Langfuse side by side. Again, these two runs are the stock
+ten items; with your twelve the totals will be different. The row that matters
+is `lost-card`, and the direction it moved:
 
 | run | mean | passed | `lost-card` |
 | --- | --- | --- | --- |

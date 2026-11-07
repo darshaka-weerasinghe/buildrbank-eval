@@ -12,14 +12,16 @@ We want three different things:
 
   1. our own .env, in this project folder
   2. one OpenRouter key instead of several different provider keys
-  3. the agent package left EXACTLY as the students wrote it
+  3. the agent package configured from here rather than from inside itself
 
 So this file builds the settings object itself and hands it to the package.
 The package has a "have I already been configured?" check at the top of its
 `load()` function - we fill that in first, so it finds the answer waiting and
 never runs its own loader.
 
-Nothing in vendor/ is edited. Not one line.
+This file edits nothing in vendor/. Week 09 does: the judge now receives the
+evidence the agent retrieved, and step 8 of STEPS.md has you add one more
+decorator by hand. Those are the only changes, and both are deliberate.
 
 ORDER MATTERS
 -------------
@@ -37,8 +39,8 @@ from dotenv import load_dotenv
 
 # The agent package lives in vendor/, which Python does not look in by
 # default. Add it to the search path so `import buildrbank` works. We keep
-# it there rather than installing it, so you can see at a glance that it is
-# an untouched copy of the students' code.
+# it there rather than installing it, so you can read the agent's own source
+# at a glance instead of hunting for it in site-packages.
 _VENDOR = Path(__file__).resolve().parent.parent / "vendor"
 if str(_VENDOR) not in sys.path:
     sys.path.insert(0, str(_VENDOR))

@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Prove that vendor/buildrbank/ is still exactly what the students wrote.
+# Show what, if anything, in vendor/buildrbank/ differs from the agent as it
+# was written in class.
+#
+# In THIS repo it is expected to differ. Week 09 changed the judge so that it
+# receives the evidence the agent retrieved, and step 8 of STEPS.md has you
+# add one more decorator by hand. The script is here so you can see that the
+# list of changes is short, not so you can prove the list is empty.
 #
 #   ./scripts/verify-vendor.sh
 #
@@ -24,8 +30,8 @@ FROM_HERE=$(cd "$HERE/vendor" && find buildrbank -type f -name '*.py' | sort | t
 echo "  from git    $FROM_GIT"
 echo "  from vendor $FROM_HERE"
 if [ "$FROM_GIT" = "$FROM_HERE" ]; then
-  echo "  IDENTICAL - the agent has not been modified."
+  echo "  IDENTICAL - the agent is unchanged from class."
 else
-  echo "  DIFFERENT - something in vendor/ has been edited. It should not be."
-  exit 1
+  echo "  DIFFERENT - vendor/ has been edited. Expected in week-09; run"
+  echo "              git diff vendor/ to see exactly what changed."
 fi

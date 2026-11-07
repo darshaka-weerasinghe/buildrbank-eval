@@ -68,7 +68,7 @@ tells you whether a change made things better or only different.
 
 ## Start here
 
-**[STEPS.md](STEPS.md)** — eighteen steps, from forking this repo to proving a
+**[STEPS.md](STEPS.md)** — twenty steps, from forking this repo to proving a
 prompt change helped. `python scripts/check.py` verifies your environment
 first.
 
